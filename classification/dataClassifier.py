@@ -73,6 +73,23 @@ def enhancedFeatureExtractorDigit(datum):
 
     ## DESCRIBE YOUR ENHANCED FEATURES HERE...
 
+    Enhanced features for digit classification:
+
+    1. Hole Count Features (zero_holes, one_hole, two_holes):
+       - Counts enclosed white regions (topological holes) within the digit
+       - Applies BFS/flood fill from borders to identify interior holes
+       - Distinguishes digits like 0,6,8,9 (multiple holes) from 1,2,3,4,5,7 (no holes)
+       - Encoded as 3 binary features (mutually exclusive categories)
+
+    2. High Density Feature:
+       - Measures the ratio of filled pixels to total pixels
+       - Binary feature: 1 if density > 25%, 0 otherwise
+       - Separates thick digits (0,8,6,9) from thin digits (1,7)
+
+    These features complement the pixel-level features by capturing structural
+    properties that distinguish digit shapes, particularly differences in topology
+    (holes) and overall ink density.
+
     ##
     """
     features =  basicFeatureExtractorDigit(datum)
@@ -178,8 +195,110 @@ def enhancedPacmanFeatures(state, action):
     It should return a counter with { <feature name> : <feature value>, ... }
     """
     features = util.Counter()
-    "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    successor = state.generateSuccessor(0, action)
+    currentPos = state.getPacmanPosition()
+    successorPos = successor.getPacmanPosition()
+
+    food = state.getFood()
+    successorFood = successor.getFood()
+    capsules = state.getCapsules()
+    successorCapsules = successor.getCapsules()
+
+    ghostStates = state.getGhostStates()
+    successorGhostStates = successor.getGhostStates()
+
+    def manhattan(p1, p2):
+        return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
+
+    # 1. Stop action feature
+    features['is_stop'] = 1 if action == 'Stop' else 0
+
+    # 2. Food features
+    foodList = food.asList()
+    if foodList:
+        currentFoodDistances = [manhattan(currentPos, f) for f in foodList]
+        successorFoodDistances = [manhattan(successorPos, f) for f in foodList]
+        currentClosestFood = min(currentFoodDistances)
+        successorClosestFood = min(successorFoodDistances)
+        features['closestFood'] = float(successorClosestFood)
+        features['foodDistanceDecreased'] = 1 if successorClosestFood < currentClosestFood else 0
+        features['foodDistanceIncreased'] = 1 if successorClosestFood > currentClosestFood else 0
+        features['eats_food'] = 1 if successorFood.count() < food.count() else 0
+    else:
+        features['closestFood'] = 0
+        features['foodDistanceDecreased'] = 0
+        features['foodDistanceIncreased'] = 0
+        features['eats_food'] = 0
+
+    # 3. Capsule features
+    if capsules:
+        currentCapsuleDistances = [manhattan(currentPos, c) for c in capsules]
+        successorCapsuleDistances = [manhattan(successorPos, c) for c in capsules]
+        currentClosestCapsule = min(currentCapsuleDistances)
+        successorClosestCapsule = min(successorCapsuleDistances)
+        features['closestCapsule'] = float(successorClosestCapsule)
+        features['capsuleDistanceDecreased'] = 1 if successorClosestCapsule < currentClosestCapsule else 0
+        features['capsuleDistanceIncreased'] = 1 if successorClosestCapsule > currentClosestCapsule else 0
+        features['eats_capsule'] = 1 if len(successorCapsules) < len(capsules) else 0
+    else:
+        features['closestCapsule'] = 0
+        features['capsuleDistanceDecreased'] = 0
+        features['capsuleDistanceIncreased'] = 0
+        features['eats_capsule'] = 0
+
+    # 4. Ghost features
+    ghostDistances = []
+    scaredGhostDistances = []
+    currentGhostDistances = []
+    currentScaredGhostDistances = []
+    ghostPositions = [ghost.getPosition() for ghost in ghostStates]
+
+    for ghost in ghostStates:
+        dist = manhattan(successorPos, ghost.getPosition())
+        currentDist = manhattan(currentPos, ghost.getPosition())
+        if ghost.scaredTimer > 0:
+            scaredGhostDistances.append(dist)
+            currentScaredGhostDistances.append(currentDist)
+        else:
+            ghostDistances.append(dist)
+            currentGhostDistances.append(currentDist)
+
+    if ghostDistances:
+        features['closestGhost'] = float(min(ghostDistances))
+        features['closestGhostNow'] = float(min(currentGhostDistances))
+        features['ghostDistanceDecreased'] = 1 if min(ghostDistances) < min(currentGhostDistances) else 0
+        features['ghostDistanceIncreased'] = 1 if min(ghostDistances) > min(currentGhostDistances) else 0
+        features['ghostThreat'] = 1 if min(ghostDistances) <= 2 else 0
+        features['ghostVeryClose'] = 1 if min(ghostDistances) <= 1 else 0
+        features['numGhostsNearby'] = sum(1 for d in ghostDistances if d <= 2)
+    else:
+        features['closestGhost'] = 10
+        features['closestGhostNow'] = 10
+        features['ghostDistanceDecreased'] = 0
+        features['ghostDistanceIncreased'] = 0
+        features['ghostThreat'] = 0
+        features['ghostVeryClose'] = 0
+        features['numGhostsNearby'] = 0
+
+    if scaredGhostDistances:
+        features['closestScaredGhost'] = float(min(scaredGhostDistances))
+        features['chaseScaredGhost'] = 1 if min(scaredGhostDistances) <= 4 else 0
+        features['numScaredGhostsNearby'] = sum(1 for d in scaredGhostDistances if d <= 4)
+        eatenScared = len(currentScaredGhostDistances) > len(scaredGhostDistances)
+        features['eats_scared_ghost'] = 1 if eatenScared else 0
+    else:
+        features['closestScaredGhost'] = 10
+        features['chaseScaredGhost'] = 0
+        features['numScaredGhostsNearby'] = 0
+        features['eats_scared_ghost'] = 0
+
+    # 5. Score and state features
+    features['scoreChange'] = successor.getScore() - state.getScore()
+    features['isWin'] = 1 if successor.isWin() else 0
+    features['isLose'] = 1 if successor.isLose() else 0
+    features['nextFoodCount'] = successorFood.count()
+    features['nextCapsuleCount'] = len(successorCapsules)
+
     return features
 
 
