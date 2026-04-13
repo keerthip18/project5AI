@@ -203,14 +203,12 @@ def enhancedPacmanFeatures(state, action):
     successorFood = successor.getFood()
     capsules = state.getCapsules()
     successorCapsules = successor.getCapsules()
-
     ghostStates = state.getGhostStates()
-    successorGhostStates = successor.getGhostStates()
 
     def manhattan(p1, p2):
         return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
 
-    # 1. Stop action feature
+    # 1. Stop action
     features['is_stop'] = 1 if action == 'Stop' else 0
 
     # 2. Food features
@@ -223,12 +221,24 @@ def enhancedPacmanFeatures(state, action):
         features['closestFood'] = float(successorClosestFood)
         features['foodDistanceDecreased'] = 1 if successorClosestFood < currentClosestFood else 0
         features['foodDistanceIncreased'] = 1 if successorClosestFood > currentClosestFood else 0
+        features['foodDistanceSame'] = 1 if successorClosestFood == currentClosestFood else 0
+        features['foodNearby'] = 1 if successorClosestFood <= 2 else 0
         features['eats_food'] = 1 if successorFood.count() < food.count() else 0
+        features['foodZero'] = 1 if successorClosestFood == 0 else 0
+        features['foodOne'] = 1 if successorClosestFood == 1 else 0
+        features['foodTwo'] = 1 if successorClosestFood == 2 else 0
+        features['foodThreePlus'] = 1 if successorClosestFood >= 3 else 0
     else:
         features['closestFood'] = 0
         features['foodDistanceDecreased'] = 0
         features['foodDistanceIncreased'] = 0
+        features['foodDistanceSame'] = 0
+        features['foodNearby'] = 0
         features['eats_food'] = 0
+        features['foodZero'] = 0
+        features['foodOne'] = 0
+        features['foodTwo'] = 0
+        features['foodThreePlus'] = 0
 
     # 3. Capsule features
     if capsules:
@@ -240,59 +250,75 @@ def enhancedPacmanFeatures(state, action):
         features['capsuleDistanceDecreased'] = 1 if successorClosestCapsule < currentClosestCapsule else 0
         features['capsuleDistanceIncreased'] = 1 if successorClosestCapsule > currentClosestCapsule else 0
         features['eats_capsule'] = 1 if len(successorCapsules) < len(capsules) else 0
+        features['capsuleNearby'] = 1 if successorClosestCapsule <= 2 else 0
+        features['capsuleZero'] = 1 if successorClosestCapsule == 0 else 0
+        features['capsuleOne'] = 1 if successorClosestCapsule == 1 else 0
+        features['capsuleTwoPlus'] = 1 if successorClosestCapsule >= 2 else 0
     else:
         features['closestCapsule'] = 0
         features['capsuleDistanceDecreased'] = 0
         features['capsuleDistanceIncreased'] = 0
         features['eats_capsule'] = 0
+        features['capsuleNearby'] = 0
+        features['capsuleZero'] = 0
+        features['capsuleOne'] = 0
+        features['capsuleTwoPlus'] = 0
 
     # 4. Ghost features
-    ghostDistances = []
+    activeGhostDistances = []
     scaredGhostDistances = []
-    currentGhostDistances = []
-    currentScaredGhostDistances = []
-    ghostPositions = [ghost.getPosition() for ghost in ghostStates]
+    activeCurrentDistances = []
+    scaredCurrentDistances = []
 
     for ghost in ghostStates:
-        dist = manhattan(successorPos, ghost.getPosition())
         currentDist = manhattan(currentPos, ghost.getPosition())
+        successorDist = manhattan(successorPos, ghost.getPosition())
         if ghost.scaredTimer > 0:
-            scaredGhostDistances.append(dist)
-            currentScaredGhostDistances.append(currentDist)
+            scaredGhostDistances.append(successorDist)
+            scaredCurrentDistances.append(currentDist)
         else:
-            ghostDistances.append(dist)
-            currentGhostDistances.append(currentDist)
+            activeGhostDistances.append(successorDist)
+            activeCurrentDistances.append(currentDist)
 
-    if ghostDistances:
-        features['closestGhost'] = float(min(ghostDistances))
-        features['closestGhostNow'] = float(min(currentGhostDistances))
-        features['ghostDistanceDecreased'] = 1 if min(ghostDistances) < min(currentGhostDistances) else 0
-        features['ghostDistanceIncreased'] = 1 if min(ghostDistances) > min(currentGhostDistances) else 0
-        features['ghostThreat'] = 1 if min(ghostDistances) <= 2 else 0
-        features['ghostVeryClose'] = 1 if min(ghostDistances) <= 1 else 0
-        features['numGhostsNearby'] = sum(1 for d in ghostDistances if d <= 2)
+    if activeGhostDistances:
+        closestActive = min(activeGhostDistances)
+        closestActiveCurrent = min(activeCurrentDistances)
+        features['closestGhost'] = float(closestActive)
+        features['ghostThreat'] = 1 if closestActive <= 2 else 0
+        features['ghostVeryClose'] = 1 if closestActive <= 1 else 0
+        features['ghostDistanceDecreased'] = 1 if closestActive < closestActiveCurrent else 0
+        features['ghostDistanceIncreased'] = 1 if closestActive > closestActiveCurrent else 0
+        features['ghostNearbyCount'] = sum(1 for d in activeGhostDistances if d <= 2)
+        features['ghostCloseCount'] = sum(1 for d in activeGhostDistances if d <= 4)
     else:
         features['closestGhost'] = 10
-        features['closestGhostNow'] = 10
-        features['ghostDistanceDecreased'] = 0
-        features['ghostDistanceIncreased'] = 0
         features['ghostThreat'] = 0
         features['ghostVeryClose'] = 0
-        features['numGhostsNearby'] = 0
+        features['ghostDistanceDecreased'] = 0
+        features['ghostDistanceIncreased'] = 0
+        features['ghostNearbyCount'] = 0
+        features['ghostCloseCount'] = 0
 
     if scaredGhostDistances:
-        features['closestScaredGhost'] = float(min(scaredGhostDistances))
-        features['chaseScaredGhost'] = 1 if min(scaredGhostDistances) <= 4 else 0
-        features['numScaredGhostsNearby'] = sum(1 for d in scaredGhostDistances if d <= 4)
-        eatenScared = len(currentScaredGhostDistances) > len(scaredGhostDistances)
-        features['eats_scared_ghost'] = 1 if eatenScared else 0
+        closestScared = min(scaredGhostDistances)
+        closestScaredCurrent = min(scaredCurrentDistances)
+        features['closestScaredGhost'] = float(closestScared)
+        features['scaredGhostNearby'] = 1 if closestScared <= 4 else 0
+        features['scaredGhostVeryClose'] = 1 if closestScared <= 2 else 0
+        features['scaredGhostDistanceDecreased'] = 1 if closestScared < closestScaredCurrent else 0
+        features['scaredGhostDistanceIncreased'] = 1 if closestScared > closestScaredCurrent else 0
+        features['chaseScaredGhost'] = 1 if closestScared <= 4 else 0
+        features['scaredGhostCountNear'] = sum(1 for d in scaredGhostDistances if d <= 4)
     else:
         features['closestScaredGhost'] = 10
+        features['scaredGhostNearby'] = 0
+        features['scaredGhostVeryClose'] = 0
+        features['scaredGhostDistanceDecreased'] = 0
+        features['scaredGhostDistanceIncreased'] = 0
         features['chaseScaredGhost'] = 0
-        features['numScaredGhostsNearby'] = 0
-        features['eats_scared_ghost'] = 0
+        features['scaredGhostCountNear'] = 0
 
-    # 5. Score and state features
+    # 5. successor state features
     features['scoreChange'] = successor.getScore() - state.getScore()
     features['isWin'] = 1 if successor.isWin() else 0
     features['isLose'] = 1 if successor.isLose() else 0
