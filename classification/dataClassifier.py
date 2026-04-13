@@ -78,10 +78,65 @@ def enhancedFeatureExtractorDigit(datum):
     features =  basicFeatureExtractorDigit(datum)
 
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+
+    # Helper to get pixel value (0 or 1)
+    def getP(x, y):
+        return datum.getPixel(x, y) > 0
+
+    # 1. Count Connected Components (Holes)
+    
+    visited = set()
+    num_regions = 0
+    
+    # Iterate through the datum including a 1-pixel border to ensure 
+    # the outer background is counted as a single connected component.
+    for x in range(-1, DIGIT_DATUM_WIDTH + 1):
+        for y in range(-1, DIGIT_DATUM_HEIGHT + 1):
+            if (x, y) not in visited:
+                # If it's a white pixel (or outside the bounds)
+                is_pixel_off = False
+                if 0 <= x < DIGIT_DATUM_WIDTH and 0 <= y < DIGIT_DATUM_HEIGHT:
+                    if datum.getPixel(x, y) == 0:
+                        is_pixel_off = True
+                else:
+                    is_pixel_off = True # The area outside the digit is "white"
+                
+                if is_pixel_off:
+                    num_regions += 1
+                    # BFS to mark the entire region
+                    queue = [(x, y)]
+                    visited.add((x, y))
+                    while queue:
+                        curr_x, curr_y = queue.pop(0)
+                        for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                            next_x, next_y = curr_x + dx, curr_y + dy
+                            if -1 <= next_x <= DIGIT_DATUM_WIDTH and \
+                               -1 <= next_y <= DIGIT_DATUM_HEIGHT:
+                                if (next_x, next_y) not in visited:
+                                    # Check if the neighbor is also white space
+                                    is_neighbor_off = False
+                                    if 0 <= next_x < DIGIT_DATUM_WIDTH and \
+                                       0 <= next_y < DIGIT_DATUM_HEIGHT:
+                                        if datum.getPixel(next_x, next_y) == 0:
+                                            is_neighbor_off = True
+                                    else:
+                                        is_neighbor_off = True
+                                    
+                                    if is_neighbor_off:
+                                        visited.add((next_x, next_y))
+                                        queue.append((next_x, next_y))
+
+    # Binary features for number of holes
+    features['zero_holes'] = 1 if num_regions == 1 else 0
+    features['one_hole'] = 1 if num_regions == 2 else 0
+    features['two_holes'] = 1 if num_regions >= 3 else 0
+
+    # 2. Ratio of filled pixels (Symmetry/Density)
+    total_pixels = DIGIT_DATUM_WIDTH * DIGIT_DATUM_HEIGHT
+    on_pixels = sum(features[(x, y)] for x in range(DIGIT_DATUM_WIDTH) for y in range(DIGIT_DATUM_HEIGHT))
+    features['high_density'] = 1 if (float(on_pixels) / total_pixels) > 0.25 else 0
 
     return features
-
 
 
 def basicFeatureExtractorPacman(state):
