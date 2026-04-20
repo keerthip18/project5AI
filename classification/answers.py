@@ -16,4 +16,4 @@ We used AI tools to assist with understanding concepts and debugging code.
 '''
 
 def q2():
-    "*** YOUR CODE HERE ***"
+    return 'a'

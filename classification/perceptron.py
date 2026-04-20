@@ -91,7 +91,11 @@ class PerceptronClassifier:
         """
         featuresWeights = []
 
-        "*** YOUR CODE HERE ***"
-        util.raiseNotDefined()
+        sortedFeatures = sorted(
+            self.weights[label].items(),
+            key=lambda item: item[1],
+            reverse=True
+        )
+        featuresWeights = [feature for feature, _ in sortedFeatures[:100]]
 
         return featuresWeights
